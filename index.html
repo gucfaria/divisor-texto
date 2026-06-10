@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Divisor de Texto — SIASS</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f7f7f5;
+    --surface: #ffffff;
+    --surface2: #f0efeb;
+    --border: #e2e0d8;
+    --border2: #cccac0;
+    --text: #1a1917;
+    --text2: #6b6960;
+    --text3: #9e9c94;
+    --accent1: #5c56b0;
+    --accent1-light: #eeecfc;
+    --accent2: #1a8a63;
+    --accent2-light: #e2f4ed;
+    --siass: #1a5c4a;
+    --siass-light: #e0f2ec;
+    --siass-border: #a7d9c8;
+    --warn: #b45309;
+    --warn-light: #fef3c7;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --font: system-ui, -apple-system, sans-serif;
+    --font-mono: 'Cascadia Code', 'Fira Mono', 'JetBrains Mono', monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141412; --surface: #1e1d1b; --surface2: #272523;
+      --border: #2e2c29; --border2: #3d3b37;
+      --text: #f0ede8; --text2: #9c9990; --text3: #5e5c57;
+      --accent1: #8e89d8; --accent1-light: #25234a;
+      --accent2: #3dba8a; --accent2-light: #0d2e21;
+      --siass: #3dba8a; --siass-light: #0c2a20; --siass-border: #1e5c45;
+      --warn: #f59e0b; --warn-light: #292108;
+    }
+  }
+
+  body { background: var(--bg); color: var(--text); font-family: var(--font);
+    font-size: 15px; line-height: 1.6; min-height: 100vh; padding: 2.5rem 1rem 5rem; }
+  .page { max-width: 740px; margin: 0 auto; }
+
+  .page-header { margin-bottom: 1.75rem; }
+  .page-header h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.4px; margin-bottom: 3px; }
+  .page-header p { font-size: 14px; color: var(--text2); }
+
+  .card { background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); padding: 1.25rem; margin-bottom: 1rem; }
+
+  .input-label { display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 8px; font-size: 13px; font-weight: 500; color: var(--text2); }
+  #char-count { font-weight: 400; color: var(--text3); }
+
+  textarea { width: 100%; min-height: 130px; resize: vertical;
+    background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-md);
+    padding: 12px 14px; font-family: var(--font); font-size: 14px; line-height: 1.65;
+    color: var(--text); outline: none; transition: border-color .15s; }
+  textarea::placeholder { color: var(--text3); }
+  textarea:focus { border-color: var(--border2); }
+
+  .stats-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin-top: 1.25rem; }
+  .stat { background: var(--surface2); border-radius: var(--radius-md); padding: 10px 12px; text-align: center; }
+  .stat .s-label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: .4px; margin-bottom: 2px; }
+  .stat .s-value { font-size: 18px; font-weight: 600; letter-spacing: -.5px; }
+
+  /* Blocks section */
+  .blocks-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+  .blocks-title { font-size: 14px; font-weight: 500; color: var(--text2); }
+  .btn { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font);
+    font-size: 13px; font-weight: 500; padding: 6px 14px; border-radius: var(--radius-sm);
+    border: 1px solid var(--border); background: var(--surface); color: var(--text2);
+    cursor: pointer; transition: background .12s, color .12s, border-color .12s; line-height: 1; }
+  .btn:hover { background: var(--surface2); border-color: var(--border2); color: var(--text); }
+  .btn svg { flex-shrink: 0; }
+
+  /* Chunk cards */
+  .chunks-list { display: flex; flex-direction: column; gap: 12px; }
+  .chunk { background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); overflow: hidden; }
+
+  .chunk-head { display: flex; align-items: center; gap: 10px; padding: 9px 14px;
+    background: var(--surface2); border-bottom: 1px solid var(--border); }
+  .chunk-badge { font-size: 11px; font-weight: 600; letter-spacing: .3px;
+    padding: 3px 9px; border-radius: 100px; flex-shrink: 0; }
+  .chunk-badge.first { background: var(--accent1-light); color: var(--accent1); }
+  .chunk-badge.rest  { background: var(--accent2-light); color: var(--accent2); }
+  .chunk-progress-wrap { flex: 1; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+  .chunk-progress { height: 100%; border-radius: 2px; transition: width .2s ease; }
+  .chunk-progress.first { background: var(--accent1); }
+  .chunk-progress.rest  { background: var(--accent2); }
+  .chunk-meta { font-size: 12px; color: var(--text3); white-space: nowrap; flex-shrink: 0; }
+  .chunk-copy-btn { flex-shrink: 0; display: inline-flex; align-items: center; gap: 5px;
+    font-family: var(--font); font-size: 12px; font-weight: 500; padding: 4px 10px;
+    border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface);
+    color: var(--text2); cursor: pointer; transition: background .12s, color .12s; }
+  .chunk-copy-btn:hover { background: var(--bg); color: var(--text); }
+  .chunk-copy-btn.copied { color: var(--accent2); border-color: var(--accent2); }
+
+  /* Per-block slider */
+  .chunk-slider-row { display: flex; align-items: center; gap: 10px; padding: 8px 14px;
+    border-bottom: 1px solid var(--border); }
+  .slider-label { font-size: 11px; color: var(--text3); text-transform: uppercase;
+    letter-spacing: .4px; white-space: nowrap; flex-shrink: 0; width: 60px; }
+  .chunk-slider { -webkit-appearance: none; appearance: none; flex: 1; height: 4px;
+    background: var(--border); border-radius: 2px; outline: none; cursor: pointer; }
+  .chunk-slider.first::-webkit-slider-thumb { -webkit-appearance: none; width: 15px; height: 15px;
+    border-radius: 50%; background: var(--accent1); cursor: pointer;
+    border: 2px solid var(--surface); box-shadow: 0 0 0 1px var(--accent1); }
+  .chunk-slider.rest::-webkit-slider-thumb { -webkit-appearance: none; width: 15px; height: 15px;
+    border-radius: 50%; background: var(--accent2); cursor: pointer;
+    border: 2px solid var(--surface); box-shadow: 0 0 0 1px var(--accent2); }
+  .chunk-slider.first::-moz-range-thumb { width: 15px; height: 15px; border-radius: 50%;
+    background: var(--accent1); cursor: pointer; border: 2px solid var(--surface); }
+  .chunk-slider.rest::-moz-range-thumb { width: 15px; height: 15px; border-radius: 50%;
+    background: var(--accent2); cursor: pointer; border: 2px solid var(--surface); }
+  .slider-val { font-size: 13px; font-weight: 600; letter-spacing: -.3px;
+    min-width: 36px; text-align: right; flex-shrink: 0; }
+  .slider-val.first { color: var(--accent1); }
+  .slider-val.rest  { color: var(--accent2); }
+
+  /* SIASS field selector row */
+  .chunk-siass-row { display: flex; align-items: center; gap: 10px; padding: 7px 14px;
+    border-bottom: 1px solid var(--border); background: var(--siass-light); }
+  .siass-icon { font-size: 12px; flex-shrink: 0; color: var(--siass); }
+  .siass-select { flex: 1; font-family: var(--font); font-size: 12px; font-weight: 500;
+    color: var(--siass); background: transparent; border: none; outline: none; cursor: pointer;
+    min-width: 0; }
+  .siass-select option { background: var(--surface); color: var(--text); }
+  .siass-limit-warn { font-size: 11px; color: var(--warn); background: var(--warn-light);
+    padding: 2px 7px; border-radius: 4px; flex-shrink: 0; white-space: nowrap; }
+
+  /* Block body */
+  .chunk-body { padding: 12px 14px; font-family: var(--font-mono); font-size: 13px;
+    line-height: 1.7; color: var(--text); white-space: pre-wrap; word-break: break-word;
+    max-height: 160px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border2) transparent; }
+
+  /* SIASS export zone */
+  .siass-export-card { border: 1.5px dashed var(--siass-border); background: var(--siass-light);
+    border-radius: var(--radius-lg); padding: 1.25rem; margin-top: 1.5rem; }
+  .siass-export-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .siass-export-header h2 { font-size: 15px; font-weight: 600; color: var(--siass); }
+  .siass-export-header span { font-size: 13px; color: var(--text2); }
+  .bm-drag-zone { background: var(--surface); border: 1px solid var(--siass-border);
+    border-radius: var(--radius-md); padding: 18px; text-align: center; margin-bottom: 10px; }
+  .bm-drag-zone p { font-size: 13px; color: var(--text2); margin-bottom: 12px; }
+  .bm-link { display: inline-flex; align-items: center; gap: 8px; background: var(--siass);
+    color: #fff; text-decoration: none; padding: 11px 22px; border-radius: var(--radius-sm);
+    font-size: 14px; font-weight: 500; cursor: grab; user-select: none; transition: opacity .15s; }
+  .bm-link:hover { opacity: .88; }
+  .bm-link:active { cursor: grabbing; }
+  .bm-hint { font-size: 12px; color: var(--text3); margin-top: 10px; line-height: 1.5; }
+
+  /* Empty state */
+  .empty { text-align: center; padding: 3rem 1rem; color: var(--text3); }
+  .empty-icon { font-size: 32px; margin-bottom: 10px; }
+  .empty p { font-size: 14px; }
+
+  footer { margin-top: 3rem; text-align: center; font-size: 12px; color: var(--text3); }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="page-header">
+    <h1>Divisor de Texto — SIASS</h1>
+    <p>Cole o texto, ajuste os blocos e exporte direto para o formulário de perícia.</p>
+  </header>
+
+  <div class="card">
+    <div class="input-label">
+      <span>Texto</span>
+      <span id="char-count">0 caracteres</span>
+    </div>
+    <textarea id="input" placeholder="Cole o texto da perícia aqui..."></textarea>
+    <div class="stats-row" id="stats-row" style="display:none">
+      <div class="stat"><div class="s-label">Caracteres</div><div class="s-value" id="st-chars">0</div></div>
+      <div class="stat"><div class="s-label">Blocos</div><div class="s-value" id="st-blocks">0</div></div>
+      <div class="stat"><div class="s-label">Sobra</div><div class="s-value" id="st-last">0</div></div>
+    </div>
+  </div>
+
+  <div id="blocks-section" style="display:none">
+    <div class="blocks-header">
+      <span class="blocks-title" id="blocks-title"></span>
+      <button class="btn" id="btn-copy-all" onclick="copyAll()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        Copiar tudo
+      </button>
+    </div>
+    <div class="chunks-list" id="chunks-list"></div>
+
+    <!-- SIASS export zone -->
+    <div class="siass-export-card" id="siass-zone">
+      <div class="siass-export-header">
+        <h2>🏥 Exportar para SIASS</h2>
+        <span id="siass-summary"></span>
+      </div>
+      <div class="bm-drag-zone">
+        <p>Arraste o bookmark abaixo para a barra de favoritos, depois abra a página de perícia no SIASS e clique nele.</p>
+        <a class="bm-link" id="siass-bm-link" href="#">
+          🏥 &nbsp;Preencher Perícia SIASS
+        </a>
+      </div>
+      <p class="bm-hint">
+        ⟳ O bookmark é atualizado automaticamente cada vez que você altera o texto ou os campos.<br>
+        Arraste novamente sempre que mudar o conteúdo. O bookmark nunca submete o formulário.
+      </p>
+    </div>
+  </div>
+
+  <div id="empty-state" class="empty">
+    <div class="empty-icon">⬆︎</div>
+    <p>Cole um texto acima para ver os blocos aqui.</p>
+  </div>
+
+  <footer>Divisor de Texto — SIASS · uso local</footer>
+</div>
+
+<script>
+// ── SIASS field map ──────────────────────────────────────────────────────────
+var SIASS_FIELDS = [
+  { v: '',                      l: '— não exportar —',            lim: null },
+  { v: 'descAnamnese',          l: 'Anamnese',                    lim: 1200 },
+  { v: 'descEvolucaoAnamnese',  l: 'Evolução da Anamnese',        lim: 1200 },
+  { v: 'descExameFisico',       l: 'Exame Físico / Clínico',      lim: 600  },
+  { v: 'resultadoExame',        l: 'Resultado do Exame',          lim: 600  },
+  { v: 'observacoesExame',      l: 'Observações Adicionais',      lim: 600  },
+  { v: 'descricaoTerapeutica',  l: 'Terapêutica Instituída',      lim: 600  },
+];
+var DEFAULT_FIELDS = [
+  'descAnamnese',
+  'descEvolucaoAnamnese',
+  'descExameFisico',
+  'resultadoExame',
+  'observacoesExame',
+  'descricaoTerapeutica',
+];
+
+// ── State ────────────────────────────────────────────────────────────────────
+const inputEl       = document.getElementById('input');
+const charCountEl   = document.getElementById('char-count');
+const statsRowEl    = document.getElementById('stats-row');
+const stCharsEl     = document.getElementById('st-chars');
+const stBlocksEl    = document.getElementById('st-blocks');
+const stLastEl      = document.getElementById('st-last');
+const blocksSectEl  = document.getElementById('blocks-section');
+const blocksTitleEl = document.getElementById('blocks-title');
+const chunksListEl  = document.getElementById('chunks-list');
+const emptyStateEl  = document.getElementById('empty-state');
+const siassBmLink   = document.getElementById('siass-bm-link');
+const siassSummary  = document.getElementById('siass-summary');
+
+const blockSizes  = [1196];
+const blockFields = [];   // SIASS field assignment per block index
+const DEFAULT_SIZE = 592;
+
+function getSize(i) {
+  if (blockSizes[i] !== undefined) return blockSizes[i];
+  blockSizes[i] = DEFAULT_SIZE;
+  return DEFAULT_SIZE;
+}
+function getField(i) {
+  if (blockFields[i] !== undefined) return blockFields[i];
+  blockFields[i] = DEFAULT_FIELDS[i] || '';
+  return blockFields[i];
+}
+function setField(i, val) {
+  blockFields[i] = val;
+  rebuildBookmarklet();
+  updateWarn(i);
+}
+
+function fmt(n) { return n.toLocaleString('pt-BR'); }
+
+function splitText(text) {
+  if (!text) return [];
+  var chunks = [], pos = 0, i = 0;
+  while (pos < text.length) {
+    var size = getSize(i);
+    var end  = pos + size;
+    if (end >= text.length) { chunks.push(text.slice(pos)); break; }
+    var cut = end;
+    if (!/\s/.test(text[end])) {
+      var j = end - 1;
+      while (j > pos && !/\s/.test(text[j])) j--;
+      if (j > pos) cut = j;
+    }
+    chunks.push(text.slice(pos, cut).replace(/\s+$/, ''));
+    pos = cut;
+    while (pos < text.length && /\s/.test(text[pos])) pos++;
+    i++;
+  }
+  return chunks;
+}
+
+// ── Icons ────────────────────────────────────────────────────────────────────
+function icoCopy(sz) {
+  sz = sz || 12;
+  return '<svg width="'+sz+'" height="'+sz+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+}
+function icoCheck(sz) {
+  sz = sz || 12;
+  return '<svg width="'+sz+'" height="'+sz+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+}
+
+// ── Copy actions ─────────────────────────────────────────────────────────────
+function copyChunk(idx) {
+  var chunks = splitText(inputEl.value);
+  if (!chunks[idx]) return;
+  navigator.clipboard.writeText(chunks[idx]).then(function() {
+    var btn = document.getElementById('cbtn-'+idx);
+    if (!btn) return;
+    btn.classList.add('copied');
+    btn.innerHTML = icoCheck() + ' Copiado';
+    setTimeout(function() { btn.classList.remove('copied'); btn.innerHTML = icoCopy() + ' Copiar'; }, 1600);
+  });
+}
+function copyAll() {
+  var chunks = splitText(inputEl.value);
+  var out = chunks.map(function(c,i){ return '── Bloco '+(i+1)+' ──\n'+c; }).join('\n\n');
+  var btn = document.getElementById('btn-copy-all');
+  navigator.clipboard.writeText(out).then(function() {
+    btn.innerHTML = icoCheck(14) + ' Copiado!';
+    setTimeout(function() { btn.innerHTML = icoCopy(14) + ' Copiar tudo'; }, 1800);
+  });
+}
+
+// ── Slider ───────────────────────────────────────────────────────────────────
+function onSliderInput(idx, val) {
+  blockSizes[idx] = +val;
+  var valEl = document.getElementById('sval-'+idx);
+  if (valEl) valEl.textContent = fmt(+val);
+  renderDebounced();
+}
+var renderPending = false;
+function renderDebounced() {
+  if (renderPending) return;
+  renderPending = true;
+  requestAnimationFrame(function() { renderPending = false; _render(); });
+}
+
+// ── Warn if block exceeds SIASS field limit ──────────────────────────────────
+function updateWarn(idx) {
+  var warnEl = document.getElementById('siass-warn-'+idx);
+  if (!warnEl) return;
+  var fieldKey = getField(idx);
+  var fieldDef = SIASS_FIELDS.find(function(f){ return f.v === fieldKey; });
+  var chunks   = splitText(inputEl.value);
+  var chunk    = chunks[idx] || '';
+  if (fieldDef && fieldDef.lim && chunk.length > fieldDef.lim) {
+    warnEl.textContent = '⚠ ' + chunk.length + ' > ' + fieldDef.lim;
+    warnEl.style.display = 'inline-block';
+  } else {
+    warnEl.style.display = 'none';
+  }
+}
+
+// ── Build SIASS bookmarklet ──────────────────────────────────────────────────
+function buildBookmarkletData() {
+  var chunks = splitText(inputEl.value);
+  var data = [];
+  chunks.forEach(function(chunk, i) {
+    var f = getField(i);
+    if (f) data.push({ field: f, text: chunk });
+  });
+  return data;
+}
+
+function rebuildBookmarklet() {
+  var data = buildBookmarkletData();
+  var assigned = data.filter(function(d){ return d.field; }).length;
+
+  // Update summary
+  if (assigned > 0) {
+    siassSummary.textContent = assigned + ' campo' + (assigned !== 1 ? 's' : '') + ' mapeado' + (assigned !== 1 ? 's' : '');
+  } else {
+    siassSummary.textContent = 'nenhum campo selecionado';
+  }
+
+  // The bookmarklet function — will have data injected
+  function siassFill() {
+    var DATA = '__DATA__';
+    var filled = 0, errors = [];
+    DATA.forEach(function(item) {
+      if (!item.field || !item.text) return;
+      var el = document.querySelector('[name="' + item.field + '"]');
+      if (!el) { errors.push(item.field); return; }
+      el.value = item.text;
+      ['input','change','blur'].forEach(function(ev) {
+        el.dispatchEvent(new Event(ev, { bubbles: true }));
+      });
+      // Trigger counter update (SIASS uses onkeyup counters)
+      var ku = new KeyboardEvent('keyup', { bubbles: true });
+      el.dispatchEvent(ku);
+      filled++;
+    });
+    var msg = filled > 0
+      ? '\u2713 ' + filled + ' campo(s) preenchido(s). Revise e clique Gravar.'
+      : '\u26a0 Nenhum campo encontrado. Verifique se o formulário está aberto.';
+    if (errors.length) msg += ' Não encontrado: ' + errors.join(', ');
+    var t = document.createElement('div');
+    t.innerHTML = msg;
+    t.style.cssText = [
+      'position:fixed','top:16px','right:16px',
+      'background:' + (filled > 0 ? '#1a5c4a' : '#b45309'),
+      'color:#fff','padding:12px 20px','border-radius:8px',
+      'font-size:14px','z-index:2147483647',
+      'font-family:-apple-system,system-ui,sans-serif',
+      'box-shadow:0 4px 20px rgba(0,0,0,.2)',
+      'max-width:320px','line-height:1.4'
+    ].join(';');
+    document.body.appendChild(t);
+    setTimeout(function() { t.style.opacity='0'; t.style.transition='opacity .4s'; setTimeout(function(){t.remove();},400); }, 4000);
+  }
+
+  var src = siassFill.toString();
+  src = src.replace("'__DATA__'", JSON.stringify(data));
+  var bmCode = '(' + src + ')()';
+  siassBmLink.href = 'javascript:' + encodeURIComponent(bmCode);
+
+  // Update warns per block
+  var chunks = splitText(inputEl.value);
+  chunks.forEach(function(_, i) { updateWarn(i); });
+}
+
+// ── Build SIASS field selector HTML ─────────────────────────────────────────
+function buildFieldSelect(idx, chunkLen) {
+  var current = getField(idx);
+  var opts = SIASS_FIELDS.map(function(f) {
+    return '<option value="' + f.v + '"' + (f.v === current ? ' selected' : '') + '>' + f.l + (f.lim ? ' (' + f.lim + ')' : '') + '</option>';
+  }).join('');
+  var warnDisplay = 'none';
+  var warnText = '';
+  var fieldDef = SIASS_FIELDS.find(function(f){ return f.v === current; });
+  if (fieldDef && fieldDef.lim && chunkLen > fieldDef.lim) {
+    warnDisplay = 'inline-block';
+    warnText = '⚠ ' + chunkLen + ' > ' + fieldDef.lim;
+  }
+  return '<div class="chunk-siass-row">'
+    + '<span class="siass-icon">🏥</span>'
+    + '<select class="siass-select" id="siass-sel-'+idx+'" onchange="setField('+idx+',this.value)">' + opts + '</select>'
+    + '<span class="siass-limit-warn" id="siass-warn-'+idx+'" style="display:'+warnDisplay+'">' + warnText + '</span>'
+    + '</div>';
+}
+
+// ── Main render ──────────────────────────────────────────────────────────────
+function _render() {
+  var text = inputEl.value;
+  charCountEl.textContent = fmt(text.length) + ' caractere' + (text.length !== 1 ? 's' : '');
+  var chunks = splitText(text);
+
+  if (chunks.length === 0) {
+    statsRowEl.style.display   = 'none';
+    blocksSectEl.style.display = 'none';
+    emptyStateEl.style.display = 'block';
+    return;
+  }
+
+  statsRowEl.style.display   = 'grid';
+  blocksSectEl.style.display = 'block';
+  emptyStateEl.style.display = 'none';
+
+  stCharsEl.textContent  = fmt(text.length);
+  stBlocksEl.textContent = chunks.length;
+  stLastEl.textContent   = chunks[chunks.length-1].length;
+  blocksTitleEl.textContent = chunks.length + ' bloco' + (chunks.length !== 1 ? 's' : '') + ' gerado' + (chunks.length !== 1 ? 's' : '');
+
+  chunksListEl.innerHTML = chunks.map(function(chunk, i) {
+    var isFirst = i === 0;
+    var cap  = getSize(i);
+    var pct  = Math.min(100, Math.round((chunk.length / cap) * 100));
+    var cls  = isFirst ? 'first' : 'rest';
+    var lbl  = isFirst ? '1º Bloco' : 'Bloco ' + (i+1);
+    var esc  = chunk.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return '<div class="chunk">'
+      + '<div class="chunk-head">'
+      + '<span class="chunk-badge '+cls+'">'+lbl+'</span>'
+      + '<div class="chunk-progress-wrap"><div class="chunk-progress '+cls+'" style="width:'+pct+'%"></div></div>'
+      + '<span class="chunk-meta">'+chunk.length+' / '+cap+'</span>'
+      + '<button class="chunk-copy-btn" id="cbtn-'+i+'" onclick="copyChunk('+i+')">' + icoCopy() + ' Copiar</button>'
+      + '</div>'
+      + '<div class="chunk-slider-row">'
+      + '<span class="slider-label">Limite</span>'
+      + '<input type="range" class="chunk-slider '+cls+'" id="sldr-'+i+'" min="100" max="3000" step="10" value="'+cap+'" oninput="onSliderInput('+i+',this.value)">'
+      + '<span class="slider-val '+cls+'" id="sval-'+i+'">'+fmt(cap)+'</span>'
+      + '</div>'
+      + buildFieldSelect(i, chunk.length)
+      + '<div class="chunk-body">'+esc+'</div>'
+      + '</div>';
+  }).join('');
+
+  rebuildBookmarklet();
+}
+
+inputEl.addEventListener('input', function() { _render(); });
+_render();
+</script>
+</body>
+</html>
