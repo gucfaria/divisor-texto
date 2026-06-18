@@ -210,15 +210,10 @@
         <h2>🏥 Exportar para SIASS</h2>
         <span id="siass-summary"></span>
       </div>
-      <div class="bm-drag-zone">
-        <p>Arraste o bookmark abaixo para a barra de favoritos, depois abra a página de perícia no SIASS e clique nele.</p>
-        <a class="bm-link" id="siass-bm-link" href="#">
-          🏥 &nbsp;Preencher Perícia SIASS
-        </a>
-      </div>
+      <div id="siass-bm-container"></div>
       <p class="bm-hint">
-        ⟳ O bookmark é atualizado automaticamente cada vez que você altera o texto ou os campos.<br>
-        Arraste novamente sempre que mudar o conteúdo. O bookmark nunca submete o formulário.
+        ⟳ Os bookmarks são atualizados automaticamente a cada mudança de texto.<br>
+        Arraste novamente sempre que mudar o conteúdo. Nenhum bookmark submete o formulário.
       </p>
     </div>
   </div>
@@ -251,23 +246,24 @@ var DEFAULT_FIELDS = [
 ];
 
 // ── State ────────────────────────────────────────────────────────────────────
-const inputEl       = document.getElementById('input');
-const charCountEl   = document.getElementById('char-count');
-const statsRowEl    = document.getElementById('stats-row');
-const stCharsEl     = document.getElementById('st-chars');
-const stBlocksEl    = document.getElementById('st-blocks');
-const stLastEl      = document.getElementById('st-last');
-const blocksSectEl  = document.getElementById('blocks-section');
-const blocksTitleEl = document.getElementById('blocks-title');
-const chunksListEl  = document.getElementById('chunks-list');
-const emptyStateEl  = document.getElementById('empty-state');
-const siassBmLink   = document.getElementById('siass-bm-link');
-const siassSummary  = document.getElementById('siass-summary');
+const inputEl        = document.getElementById('input');
+const charCountEl    = document.getElementById('char-count');
+const statsRowEl     = document.getElementById('stats-row');
+const stCharsEl      = document.getElementById('st-chars');
+const stBlocksEl     = document.getElementById('st-blocks');
+const stLastEl       = document.getElementById('st-last');
+const blocksSectEl   = document.getElementById('blocks-section');
+const blocksTitleEl  = document.getElementById('blocks-title');
+const chunksListEl   = document.getElementById('chunks-list');
+const emptyStateEl   = document.getElementById('empty-state');
+const siassBmCont    = document.getElementById('siass-bm-container');
+const siassSummary   = document.getElementById('siass-summary');
 
 const blockSizes  = [1196];
 const blockFields = [];   // SIASS field assignment per block index
 const DEFAULT_SIZE = 592;
 
+// Blocks 0-3: fixed mapping. Blocks 4+ alternate resultadoExame / observacoesExame.
 function getSize(i) {
   if (blockSizes[i] !== undefined) return blockSizes[i];
   blockSizes[i] = DEFAULT_SIZE;
@@ -275,12 +271,16 @@ function getSize(i) {
 }
 function getField(i) {
   if (blockFields[i] !== undefined) return blockFields[i];
-  blockFields[i] = DEFAULT_FIELDS[i] || '';
+  if (i < DEFAULT_FIELDS.length) {
+    blockFields[i] = DEFAULT_FIELDS[i];
+  } else {
+    blockFields[i] = ((i - 4) % 2 === 0) ? 'resultadoExame' : 'observacoesExame';
+  }
   return blockFields[i];
 }
 function setField(i, val) {
   blockFields[i] = val;
-  rebuildBookmarklet();
+  rebuildBookmarklets();
   updateWarn(i);
 }
 
@@ -390,31 +390,11 @@ function updateWarn(idx) {
   }
 }
 
-// ── Build SIASS bookmarklet ──────────────────────────────────────────────────
-function buildBookmarkletData() {
-  var chunks = getDecoratedChunks();
-  var data = [];
-  chunks.forEach(function(chunk, i) {
-    var f = getField(i);
-    if (f) data.push({ field: f, text: chunk });
-  });
-  return data;
-}
-
-function rebuildBookmarklet() {
-  var data = buildBookmarkletData();
-  var assigned = data.filter(function(d){ return d.field; }).length;
-
-  // Update summary
-  if (assigned > 0) {
-    siassSummary.textContent = assigned + ' campo' + (assigned !== 1 ? 's' : '') + ' mapeado' + (assigned !== 1 ? 's' : '');
-  } else {
-    siassSummary.textContent = 'nenhum campo selecionado';
-  }
-
-  // The bookmarklet function — will have data injected
+// ── Build SIASS bookmarklets (one per group) ──────────────────────────────────
+function makeBookmarkletUrl(data, label) {
   function siassFill() {
-    var DATA = '__DATA__';
+    var DATA  = '__DATA__';
+    var LABEL = '__LABEL__';
     var filled = 0, errors = [];
     DATA.forEach(function(item) {
       if (!item.field || !item.text) return;
@@ -424,39 +404,99 @@ function rebuildBookmarklet() {
       ['input','change','blur'].forEach(function(ev) {
         el.dispatchEvent(new Event(ev, { bubbles: true }));
       });
-      // Trigger counter update (SIASS uses onkeyup counters)
-      var ku = new KeyboardEvent('keyup', { bubbles: true });
-      el.dispatchEvent(ku);
+      el.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
       filled++;
     });
     var hasErrors = errors.length > 0;
     var msg = filled > 0
-      ? '\u2713 ' + filled + ' campo(s) preenchido(s). Revise e clique Gravar.'
-      : '\u26a0 Nenhum campo encontrado. Verifique se o formulário está aberto.';
-    if (hasErrors) msg += '<br><strong>\u26a0 Campo(s) não encontrado(s) nesta página:</strong> ' + errors.join(', ');
+      ? '\u2713 ' + LABEL + ': ' + filled + ' campo(s) preenchido(s). Revise e clique Gravar.'
+      : '\u26a0 Nenhum campo encontrado. Verifique se o formul\u00e1rio est\u00e1 aberto.';
+    if (hasErrors) msg += '<br><strong>\u26a0 N\u00e3o encontrado:</strong> ' + errors.join(', ');
     var t = document.createElement('div');
     t.innerHTML = msg;
     t.style.cssText = [
       'position:fixed','top:16px','right:16px',
-      'background:' + (hasErrors ? '#b45309' : (filled > 0 ? '#1a5c4a' : '#b45309')),
+      'background:' + (hasErrors ? '#b45309' : '#1a5c4a'),
       'color:#fff','padding:12px 20px','border-radius:8px',
       'font-size:14px','z-index:2147483647',
       'font-family:-apple-system,system-ui,sans-serif',
       'box-shadow:0 4px 20px rgba(0,0,0,.2)',
-      'max-width:320px','line-height:1.4'
+      'max-width:340px','line-height:1.4'
     ].join(';');
     document.body.appendChild(t);
-    setTimeout(function() { t.style.opacity='0'; t.style.transition='opacity .4s'; setTimeout(function(){t.remove();},400); }, hasErrors ? 8000 : 4000);
+    setTimeout(function() {
+      t.style.transition = 'opacity .4s'; t.style.opacity = '0';
+      setTimeout(function() { t.remove(); }, 400);
+    }, hasErrors ? 8000 : 4000);
   }
-
   var src = siassFill.toString();
-  src = src.replace("'__DATA__'", JSON.stringify(data));
-  var bmCode = '(' + src + ')()';
-  siassBmLink.href = 'javascript:' + encodeURIComponent(bmCode);
+  src = src.replace("'__DATA__'",  JSON.stringify(data));
+  src = src.replace("'__LABEL__'", JSON.stringify(label));
+  return 'javascript:' + encodeURIComponent('(' + src + ')()');
+}
 
-  // Update warns per block
-  var chunks = getRawChunks();
-  chunks.forEach(function(_, i) { updateWarn(i); });
+function generateGroups(decoratedChunks) {
+  var groups = [];
+  // Group 1: blocks 0–3
+  var g1 = [];
+  for (var i = 0; i < Math.min(4, decoratedChunks.length); i++) {
+    var f = getField(i);
+    if (f) g1.push({ field: f, text: decoratedChunks[i] });
+  }
+  if (g1.length) {
+    groups.push({
+      label: 'Parte 1',
+      range: 'Blocos 1–' + Math.min(4, decoratedChunks.length),
+      data: g1
+    });
+  }
+  // Groups 2+: blocks 4-5, 6-7, …
+  var start = 4, part = 2;
+  while (start < decoratedChunks.length) {
+    var end = Math.min(start + 2, decoratedChunks.length);
+    var gN = [];
+    for (var j = start; j < end; j++) {
+      var fj = getField(j);
+      if (fj) gN.push({ field: fj, text: decoratedChunks[j] });
+    }
+    if (gN.length) {
+      groups.push({
+        label: 'Parte ' + part,
+        range: 'Blocos ' + (start + 1) + (end > start + 1 ? '–' + end : ''),
+        data: gN
+      });
+    }
+    start += 2; part++;
+  }
+  return groups;
+}
+
+function rebuildBookmarklets() {
+  var decorated = getDecoratedChunks();
+  var groups    = generateGroups(decorated);
+  var total     = groups.reduce(function(acc, g) { return acc + g.data.length; }, 0);
+
+  siassSummary.textContent = total > 0
+    ? total + ' campo' + (total !== 1 ? 's' : '') + ' · ' + groups.length + ' bookmark' + (groups.length !== 1 ? 's' : '')
+    : 'nenhum campo selecionado';
+
+  siassBmCont.innerHTML = groups.map(function(g) {
+    var url = makeBookmarkletUrl(g.data, g.label);
+    var fields = g.data.map(function(d) {
+      var def = SIASS_FIELDS.find(function(f) { return f.v === d.field; });
+      return def ? def.l : d.field;
+    }).join(', ');
+    return '<div class="bm-drag-zone" style="margin-bottom:10px">'
+      + '<p style="margin-bottom:6px"><strong>' + g.label + '</strong> &nbsp;·&nbsp; ' + g.range
+      + '</p><p style="font-size:12px;margin-bottom:12px;color:#888">→ ' + fields + '</p>'
+      + '<a class="bm-link" href="' + url + '" style="font-size:13px;padding:9px 18px">'
+      + '🏥&nbsp; SIASS — ' + g.label + '</a>'
+      + '</div>';
+  }).join('');
+
+  // Update limit warns per block
+  var raw = getRawChunks();
+  raw.forEach(function(_, i) { updateWarn(i); });
 }
 
 // ── Build SIASS field selector HTML ─────────────────────────────────────────
@@ -530,7 +570,7 @@ function _render() {
       + '</div>';
   }).join('');
 
-  rebuildBookmarklet();
+  rebuildBookmarklets();
 }
 
 inputEl.addEventListener('input', function() { _render(); });
