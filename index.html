@@ -72,7 +72,10 @@
   .stat .s-value { font-size: 18px; font-weight: 600; letter-spacing: -.5px; }
 
   /* Blocks section */
-  .blocks-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+  .blocks-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 1rem; flex-wrap: wrap; }
+  .ellipsis-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px;
+    color: var(--text2); cursor: pointer; user-select: none; flex-shrink: 0; }
+  .ellipsis-toggle input[type=checkbox] { width: 14px; height: 14px; accent-color: var(--accent1); cursor: pointer; }
   .blocks-title { font-size: 14px; font-weight: 500; color: var(--text2); }
   .btn { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font);
     font-size: 13px; font-weight: 500; padding: 6px 14px; border-radius: var(--radius-sm);
@@ -190,6 +193,10 @@
   <div id="blocks-section" style="display:none">
     <div class="blocks-header">
       <span class="blocks-title" id="blocks-title"></span>
+      <label class="ellipsis-toggle">
+        <input type="checkbox" id="ellipsis-check" onchange="onEllipsisToggle(this.checked)">
+        <span>Marcar continuação com "..."</span>
+      </label>
       <button class="btn" id="btn-copy-all" onclick="copyAll()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
         Copiar tudo
@@ -237,7 +244,6 @@ var SIASS_FIELDS = [
 ];
 var DEFAULT_FIELDS = [
   'descAnamnese',
-  'descEvolucaoAnamnese',
   'descExameFisico',
   'resultadoExame',
   'observacoesExame',
@@ -301,6 +307,27 @@ function splitText(text) {
   return chunks;
 }
 
+// ── Ellipsis continuation marker ─────────────────────────────────────────────
+var ellipsisEnabled = false;
+function onEllipsisToggle(checked) {
+  ellipsisEnabled = checked;
+  _render();
+}
+function decorateChunk(text, idx, total) {
+  if (!ellipsisEnabled) return text;
+  var out = text;
+  if (idx > 0)        out = '...' + out;   // continua do bloco anterior
+  if (idx < total - 1) out = out + '...';  // continua no próximo bloco
+  return out;
+}
+function getRawChunks() {
+  return splitText(inputEl.value);
+}
+function getDecoratedChunks() {
+  var chunks = getRawChunks();
+  return chunks.map(function(c, i) { return decorateChunk(c, i, chunks.length); });
+}
+
 // ── Icons ────────────────────────────────────────────────────────────────────
 function icoCopy(sz) {
   sz = sz || 12;
@@ -313,7 +340,7 @@ function icoCheck(sz) {
 
 // ── Copy actions ─────────────────────────────────────────────────────────────
 function copyChunk(idx) {
-  var chunks = splitText(inputEl.value);
+  var chunks = getDecoratedChunks();
   if (!chunks[idx]) return;
   navigator.clipboard.writeText(chunks[idx]).then(function() {
     var btn = document.getElementById('cbtn-'+idx);
@@ -324,7 +351,7 @@ function copyChunk(idx) {
   });
 }
 function copyAll() {
-  var chunks = splitText(inputEl.value);
+  var chunks = getDecoratedChunks();
   var out = chunks.map(function(c,i){ return '── Bloco '+(i+1)+' ──\n'+c; }).join('\n\n');
   var btn = document.getElementById('btn-copy-all');
   navigator.clipboard.writeText(out).then(function() {
@@ -353,7 +380,7 @@ function updateWarn(idx) {
   if (!warnEl) return;
   var fieldKey = getField(idx);
   var fieldDef = SIASS_FIELDS.find(function(f){ return f.v === fieldKey; });
-  var chunks   = splitText(inputEl.value);
+  var chunks   = getDecoratedChunks();
   var chunk    = chunks[idx] || '';
   if (fieldDef && fieldDef.lim && chunk.length > fieldDef.lim) {
     warnEl.textContent = '⚠ ' + chunk.length + ' > ' + fieldDef.lim;
@@ -365,7 +392,7 @@ function updateWarn(idx) {
 
 // ── Build SIASS bookmarklet ──────────────────────────────────────────────────
 function buildBookmarkletData() {
-  var chunks = splitText(inputEl.value);
+  var chunks = getDecoratedChunks();
   var data = [];
   chunks.forEach(function(chunk, i) {
     var f = getField(i);
@@ -402,15 +429,16 @@ function rebuildBookmarklet() {
       el.dispatchEvent(ku);
       filled++;
     });
+    var hasErrors = errors.length > 0;
     var msg = filled > 0
       ? '\u2713 ' + filled + ' campo(s) preenchido(s). Revise e clique Gravar.'
       : '\u26a0 Nenhum campo encontrado. Verifique se o formulário está aberto.';
-    if (errors.length) msg += ' Não encontrado: ' + errors.join(', ');
+    if (hasErrors) msg += '<br><strong>\u26a0 Campo(s) não encontrado(s) nesta página:</strong> ' + errors.join(', ');
     var t = document.createElement('div');
     t.innerHTML = msg;
     t.style.cssText = [
       'position:fixed','top:16px','right:16px',
-      'background:' + (filled > 0 ? '#1a5c4a' : '#b45309'),
+      'background:' + (hasErrors ? '#b45309' : (filled > 0 ? '#1a5c4a' : '#b45309')),
       'color:#fff','padding:12px 20px','border-radius:8px',
       'font-size:14px','z-index:2147483647',
       'font-family:-apple-system,system-ui,sans-serif',
@@ -418,7 +446,7 @@ function rebuildBookmarklet() {
       'max-width:320px','line-height:1.4'
     ].join(';');
     document.body.appendChild(t);
-    setTimeout(function() { t.style.opacity='0'; t.style.transition='opacity .4s'; setTimeout(function(){t.remove();},400); }, 4000);
+    setTimeout(function() { t.style.opacity='0'; t.style.transition='opacity .4s'; setTimeout(function(){t.remove();},400); }, hasErrors ? 8000 : 4000);
   }
 
   var src = siassFill.toString();
@@ -427,7 +455,7 @@ function rebuildBookmarklet() {
   siassBmLink.href = 'javascript:' + encodeURIComponent(bmCode);
 
   // Update warns per block
-  var chunks = splitText(inputEl.value);
+  var chunks = getRawChunks();
   chunks.forEach(function(_, i) { updateWarn(i); });
 }
 
@@ -455,14 +483,16 @@ function buildFieldSelect(idx, chunkLen) {
 function _render() {
   var text = inputEl.value;
   charCountEl.textContent = fmt(text.length) + ' caractere' + (text.length !== 1 ? 's' : '');
-  var chunks = splitText(text);
+  var rawChunks = splitText(text);
 
-  if (chunks.length === 0) {
+  if (rawChunks.length === 0) {
     statsRowEl.style.display   = 'none';
     blocksSectEl.style.display = 'none';
     emptyStateEl.style.display = 'block';
     return;
   }
+
+  var chunks = rawChunks.map(function(c, i) { return decorateChunk(c, i, rawChunks.length); });
 
   statsRowEl.style.display   = 'grid';
   blocksSectEl.style.display = 'block';
@@ -472,6 +502,9 @@ function _render() {
   stBlocksEl.textContent = chunks.length;
   stLastEl.textContent   = chunks[chunks.length-1].length;
   blocksTitleEl.textContent = chunks.length + ' bloco' + (chunks.length !== 1 ? 's' : '') + ' gerado' + (chunks.length !== 1 ? 's' : '');
+
+  var checkEl = document.getElementById('ellipsis-check');
+  if (checkEl) checkEl.checked = ellipsisEnabled;
 
   chunksListEl.innerHTML = chunks.map(function(chunk, i) {
     var isFirst = i === 0;
